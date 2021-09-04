@@ -129,7 +129,10 @@
     * DexClassLoader
     * DexPathList
     * DexFile
-  * Hook
+  * [Hook](#/JVM/ClassLoader/Hook)
+    * Android Hook点
+    * 重排Element数组
+    * 重写类加载器
 * Android JVM
   * Dex
   * Dalvik VM
