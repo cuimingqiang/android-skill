@@ -123,12 +123,14 @@
       * 解析
     * 使用
     * 卸载
+  * [ClassLoader](JVM/ClassLoader/ClassLoader.md)
+    * BootClassLoader
+    * BaseDexClassLoader
+      * PathDexClassLoader
+      * DexClassLoader
+      * DexPathList
+        * DexFile
   * 双亲委派
-  * BaseDexClassLoader
-    * PathDexClassLoader
-    * DexClassLoader
-    * DexPathList
-    * DexFile
   * [Hook](JVM/ClassLoader/Hook.md)
     * Android Hook点
     * 重排Element数组
@@ -255,7 +257,7 @@
 * OkHttp
 * Retrofit
 * 图片加载库
-  * Glide
+  * Glide(Coll)
   * Fresco
   * Picasso
 * RxJava
