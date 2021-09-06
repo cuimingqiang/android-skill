@@ -163,7 +163,7 @@ protected Class<?> loadClass(String name, boolean resolve)
     }
     ```
 
-    * DexPathList以数组成员管理所以dex文件和so库
+    * DexPathList以数组成员管理所有dex文件和so库
 
       * ```java
         private Element[] dexElements;//dex文件或包含dex的资源路径
