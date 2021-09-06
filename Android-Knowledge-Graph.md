@@ -114,7 +114,7 @@
 * 字节码
   * class
   * 执行引擎
-* ClassLoader
+* [ClassLoader](JVM/ClassLoader/ClassLoader.md)
   * 类加载
     * 加载
     * 链接
@@ -123,14 +123,6 @@
       * 解析
     * 使用
     * 卸载
-  * [ClassLoader](JVM/ClassLoader/ClassLoader.md)
-    * BootClassLoader
-    * BaseDexClassLoader
-      * PathDexClassLoader
-      * DexClassLoader
-      * DexPathList
-        * DexFile
-  * 双亲委派
   * [Hook](JVM/ClassLoader/Hook.md)
     * Android Hook点
     * 重排Element数组
