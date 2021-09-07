@@ -6,7 +6,7 @@
 
 * ##### [类查找流程](#FindClass)
 
-  * [通过ClassLoader查找](#classLoader)
+  * [通过ClassLoader查找](#byClassLoader)
     * [缓存查找过程](#findCache)
     * [通过继承委派查找](#findExtend)
   * [通过Class.forName(String name)查找](#forName)
@@ -15,6 +15,14 @@
     * [加载so](#loadso)
   
 * ##### [类加载](#LoadClass)
+
+  * 加载
+  * 链接
+    * 验证
+    * 准备
+    * 解析
+  * 使用
+  * 卸载
 
 #### <span id="Inherit">继承关系</span>
 
@@ -36,7 +44,7 @@
 
 #### <span id="FindClass">类查找流程</span>
 
-* ##### <span id="loadClass">通过ClassLoader查找</span>
+* ##### <span id="byClassLoader">通过ClassLoader查找</span>
 
 通过loadClass(String name)
 
@@ -78,7 +86,7 @@ protected Class<?> loadClass(String name, boolean resolve)
 
 1. 在缓存中查找是否加载过该类。
 
-2. 如果父类加载器parent不为空，有parent去加载(装饰器委派)。
+2. 如果父类加载器parent不为空，通过parent去加载(装饰器委派)。
 
 3. 如果未加载到，则自己(默认由BaseDexClassLoader)加载(继承委派) 。
 
@@ -230,11 +238,24 @@ protected Class<?> loadClass(String name, boolean resolve)
               }
               return result;
       }
-      //dalvik_system_DexFile.cc
       private static native Class defineClassNative(String name, ClassLoader loader, Object cookie,DexFile dexFile)
       ```
+      
+      ```c
+      //dalvik_system_DexFile.cc
+      static jclass DexFile_defineClassNative(JNIEnv* env,
+                                              jclass,
+                                              jstring javaName,
+                                              jobject javaLoader,
+                                              jobject cookie,
+                                              jobject dexFile) {
+        //通过ClassLinker的DefineClass加载类
+        class_linker->DefineClass(soa.Self(),
+      					descriptor.c_str(),hash,class_loader,*dex_file,*dex_class_def);
+      }
+      ```
     
-    通过以上代码流程可以得知，BaseDexClassLoader的findClass流程：BaseDexClassLoader.findClass-->DexPathList.findClass-->Element[] findClass-->DexFile.loadClassBinaryName-->defineClass-->defineClassNative，最终到native层去加载类，详细信息参加[类加载](#LoadClass)。
+    通过以上代码流程可以得知，BaseDexClassLoader的findClass流程：BaseDexClassLoader.findClass-->DexPathList.findClass-->Element[] findClass-->DexFile.loadClassBinaryName-->defineClass-->defineClassNative，最终到native层去[加载类](#LoadClass)。
 
 * ##### <span id="forName"> Class.forName(String name) </span>查找类过程
 
@@ -380,6 +401,15 @@ mirror::Class* ClassLinker::FindClass(Thread* self,
   }
   // success, return mirror::Class*
   return result_ptr.Ptr();
+}
+bool ClassLinker::FindClassInBaseDexClassLoader(ScopedObjectAccessAlreadyRunnable& soa,
+                                                Thread* self,
+                                                const char* descriptor,
+                                                size_t hash,
+                                                Handle<mirror::ClassLoader> class_loader,
+                                                ObjPtr<mirror::Class>* result) {
+   //加载类
+   DefineClass(self,descriptor,hash,class_loader,*cp_dex_file,*dex_class_def);
 }
 ```
 
@@ -624,3 +654,120 @@ bool JavaVMExt::LoadNativeLibrary(JNIEnv* env,
 3. dlopen打开so库。
 4. 创建ShareLibrary并添加到map<so绝对路径,so实例>中。
 5. 查找so库是否有JNI_OnLoad函数，如果有则调用。
+
+#### <span id="LoadClass">类加载</span>
+
+同上节类查找流程可知，类的加载通过该函数实现：
+
+```c++
+//art/runtime/class_linker.cc
+mirror::Class* ClassLinker::DefineClass(Thread* self,const char* descriptor,
+            size_t hash,Handle<mirror::ClassLoader> class_loader,const DexFile& dex_file,
+                                        const DexFile::ClassDef& dex_class_def) {
+  StackHandleScope<3> hs(self);
+  auto klass = hs.NewHandle<mirror::Class>(nullptr);
+  //1.分配类空间
+ 	//如果类是Object、Class、String、Reference、DexCache、ClassExt
+  //直接使用预定义的AllocClass对象
+  //...
+  //否则根据类符号引用重新分配类对象并赋值给klass,分配失败报OOM
+  if (klass == nullptr) {
+    klass.Assign(AllocClass(self, SizeOfClassWithoutEmbeddedTables(dex_file, dex_class_def)));
+  }
+  DexFile const* new_dex_file = nullptr;
+  DexFile::ClassDef const* new_class_def = nullptr;
+  //2.通过运行时回调监听类加载过程或者Hook类加载行为
+  Runtime::Current()->GetRuntimeCallbacks()->ClassPreDefine(descriptor,klass,
+             class_loader,dex_file,dex_class_def,&new_dex_file,&new_class_def);
+	//3.解析DexFile成Dex数据结构
+  //包括type、String、field、method、CallSite(GC的安全点或区域)
+  //art/runtime/mirror/dex_cache.cc --> InitializeDexCache
+  ObjPtr<mirror::DexCache> dex_cache = RegisterDexFile(*new_dex_file, class_loader.Get());
+  klass->SetDexCache(dex_cache);
+  //设置类对象信息，如访问权限、dexCache中的索引等
+  SetupClass(*new_dex_file, *new_class_def, klass, class_loader.Get());
+
+  ObjectLock<mirror::Class> lock(self, klass);
+  klass->SetClinitThreadId(self->GetTid());
+  // Make sure we have a valid empty iftable even if there are errors.
+  klass->SetIfTable(GetClassRoot(kJavaLangObject)->GetIfTable());
+  //将类插入到ClassTable中，如果已经存在，直接返回已存在，不存在则插入
+  ObjPtr<mirror::Class> existing = InsertClass(descriptor, klass.Get(), hash);
+  if (existing != nullptr) {
+    return EnsureResolved(self, descriptor, existing);
+  }
+	//
+  LoadClass(self, *new_dex_file, *new_class_def, klass);
+  if (self->IsExceptionPending()) {
+    VLOG(class_linker) << self->GetException()->Dump();
+    // An exception occured during load, set status to erroneous while holding klass' lock in case
+    // notification is necessary.
+    if (!klass->IsErroneous()) {
+      mirror::Class::SetStatus(klass, mirror::Class::kStatusErrorUnresolved, self);
+    }
+    return nullptr;
+  }
+
+  // Finish loading (if necessary) by finding parents
+  CHECK(!klass->IsLoaded());
+  if (!LoadSuperAndInterfaces(klass, *new_dex_file)) {
+    // Loading failed.
+    if (!klass->IsErroneous()) {
+      mirror::Class::SetStatus(klass, mirror::Class::kStatusErrorUnresolved, self);
+    }
+    return nullptr;
+  }
+  CHECK(klass->IsLoaded());
+
+  // At this point the class is loaded. Publish a ClassLoad event.
+  // Note: this may be a temporary class. It is a listener's responsibility to handle this.
+  Runtime::Current()->GetRuntimeCallbacks()->ClassLoad(klass);
+
+  // Link the class (if necessary)
+  CHECK(!klass->IsResolved());
+  // TODO: Use fast jobjects?
+  auto interfaces = hs.NewHandle<mirror::ObjectArray<mirror::Class>>(nullptr);
+
+  MutableHandle<mirror::Class> h_new_class = hs.NewHandle<mirror::Class>(nullptr);
+  if (!LinkClass(self, descriptor, klass, interfaces, &h_new_class)) {
+    // Linking failed.
+    if (!klass->IsErroneous()) {
+      mirror::Class::SetStatus(klass, mirror::Class::kStatusErrorUnresolved, self);
+    }
+    return nullptr;
+  }
+  self->AssertNoPendingException();
+  CHECK(h_new_class != nullptr) << descriptor;
+  CHECK(h_new_class->IsResolved() && !h_new_class->IsErroneousResolved()) << descriptor;
+
+  // Instrumentation may have updated entrypoints for all methods of all
+  // classes. However it could not update methods of this class while we
+  // were loading it. Now the class is resolved, we can update entrypoints
+  // as required by instrumentation.
+  if (Runtime::Current()->GetInstrumentation()->AreExitStubsInstalled()) {
+    // We must be in the kRunnable state to prevent instrumentation from
+    // suspending all threads to update entrypoints while we are doing it
+    // for this class.
+    DCHECK_EQ(self->GetState(), kRunnable);
+    Runtime::Current()->GetInstrumentation()->InstallStubsForClass(h_new_class.Get());
+  }
+
+  /*
+   * We send CLASS_PREPARE events to the debugger from here.  The
+   * definition of "preparation" is creating the static fields for a
+   * class and initializing them to the standard default values, but not
+   * executing any code (that comes later, during "initialization").
+   *
+   * We did the static preparation in LinkClass.
+   *
+   * The class has been prepared and resolved but possibly not yet verified
+   * at this point.
+   */
+  Runtime::Current()->GetRuntimeCallbacks()->ClassPrepare(klass, h_new_class);
+
+  // Notify native debugger of the new class and its layout.
+  jit::Jit::NewTypeLoadedIfUsingJit(h_new_class.Get());
+
+  return h_new_class.Get();
+}
+```
