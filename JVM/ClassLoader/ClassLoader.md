@@ -1,18 +1,22 @@
-### ClassLoader知识点目录
+### 	ClassLoader知识点目录
 
-* ##### 继承关系
+* ##### [继承关系](#Inherit)
 
-* ##### 双亲委派
+* ##### [双亲委派](#Parent)
 
-* ##### 类加载流程
+* ##### [类查找流程](#FindClass)
 
-  * [通过ClassLoader加载](#classLoader)
+  * [通过ClassLoader查找](#classLoader)
     * [缓存查找过程](#findCache)
-    * [通过继承委派加载类](#findExtend)
-  * [通过Class.forName(String name)加载](#forName)
-  * [so加载(System.load)](#system)
+    * [通过继承委派查找](#findExtend)
+  * [通过Class.forName(String name)查找](#forName)
+  * [加载so库(System.load)](#system)
+    * [通过ClassLoader获取so绝对路径](#clsopath)
+    * [加载so](#loadso)
+  
+* ##### [类加载](#LoadClass)
 
-#### 继承关系
+#### <span id="Inherit">继承关系</span>
 
 * ClassLoader
 
@@ -25,14 +29,14 @@
 
     DexClassLoader与PathClassLoader的不同在于是否传入了优化目录optimizedDirectory。
 
-#### 双亲委派
+#### <span id="Parent">双亲委派</span>
 
 * 构造时需传入ClassLoader(装饰器模式)
 * 继承委派(多态)
 
-#### 类加载流程
+#### <span id="FindClass">类查找流程</span>
 
-* ##### <span id="loadClass">通过ClassLoader加载</span>
+* ##### <span id="loadClass">通过ClassLoader查找</span>
 
 通过loadClass(String name)
 
@@ -46,16 +50,16 @@ public Class<?> loadClass(String name) throws ClassNotFoundException {
 
 ```java
 protected Class<?> loadClass(String name, boolean resolve)
-    throws ClassNotFoundException
-{
+    throws ClassNotFoundException{
         //1.在缓存中查找是否加载过该类。
         Class<?> c = findLoadedClass(name);
         if (c == null) {
-            try {//2.
-                if (parent != null) {//2.1委托parent去加载
+            try {
+                //2委托parent去加载
+                if (parent != null) {
                     c = parent.loadClass(name, false);
-                } else {//2.2不做任何事情。
-                    c = findBootstrapClassOrNull(name);
+                } else {。
+                    c = findBootstrapClassOrNull(name);//不做任何事情
                 }
             } catch (ClassNotFoundException e) {
                 // ClassNotFoundException thrown if class not found
@@ -74,7 +78,7 @@ protected Class<?> loadClass(String name, boolean resolve)
 
 1. 在缓存中查找是否加载过该类。
 
-2. 如果父类加载器parent不为空，有parent去加载(装饰器委托)，2.2中不做任何事情。
+2. 如果父类加载器parent不为空，有parent去加载(装饰器委派)。
 
 3. 如果未加载到，则自己(默认由BaseDexClassLoader)加载(继承委派) 。
 
@@ -124,7 +128,7 @@ protected Class<?> loadClass(String name, boolean resolve)
       if (loader != nullptr) {
         // Try the common case.
         StackHandleScope<1> hs(soa.Self());
-        //2.从父加载器parent中查找是否已经该类
+        //2.从父加载器parent中查找是否已经该类，在查找到的过程中会初始化类信息
         c = VMClassLoader::FindClassInPathClassLoader(cl,
                                                       soa,
                                                       soa.Self(),
@@ -144,7 +148,7 @@ protected Class<?> loadClass(String name, boolean resolve)
   1. 查找该类的类加载器是否已经加载过该类。
   2. 查找该类的类加载器的父加载器parent是否加载过该类。
 
-* <span id="findExtend">通过继承委派加载类</span>
+* <span id="findExtend">通过继承委派查找</span>
 
   ClassLoader的findClass未实现
 
@@ -182,13 +186,15 @@ protected Class<?> loadClass(String name, boolean resolve)
     * DexPathList以数组成员管理所有dex文件和so库
 
       * ```java
-        private Element[] dexElements;//dex文件或包含dex的资源路径
+        //dex文件或包含dex的资源路径
+        private Element[] dexElements;
         ```
-
+        
       * ```java
-        private final NativeLibraryElement[] nativeLibraryPathElements;//so库
+        //so库路径(包括app和系统)
+        private final NativeLibraryElement[] nativeLibraryPathElements;
         ```
-
+      
       ```java
       public Class<?> findClass(String name, List<Throwable> suppressed) {
           for (Element element : dexElements) {
@@ -200,22 +206,21 @@ protected Class<?> loadClass(String name, boolean resolve)
           return null;
       }
       ```
-
+      
       ```java
-      Element//Element of the dex/resource path.
+      //Element   Element of the dex/resource path.
       public Class<?> findClass(String name, ClassLoader definingContext,
               List<Throwable> suppressed) {
           return dexFile != null ? dexFile.loadClassBinaryName(name, definingContext, suppressed)
                   : null;
       }
       ```
-
+      
       ```java
-      DexFile
+      //DexFile
       public Class loadClassBinaryName(String name, ClassLoader loader, List<Throwable> suppressed) {
           return defineClass(name, loader, mCookie, this, suppressed);
       }
-      
       private static Class defineClass(String name, ClassLoader loader, Object cookie,DexFile dexFile, List<Throwable> suppressed) {
               Class result = null;
               try {
@@ -228,10 +233,10 @@ protected Class<?> loadClass(String name, boolean resolve)
       //dalvik_system_DexFile.cc
       private static native Class defineClassNative(String name, ClassLoader loader, Object cookie,DexFile dexFile)
       ```
+    
+    通过以上代码流程可以得知，BaseDexClassLoader的findClass流程：BaseDexClassLoader.findClass-->DexPathList.findClass-->Element[] findClass-->DexFile.loadClassBinaryName-->defineClass-->defineClassNative，最终到native层去加载类，详细信息参加[类加载](#LoadClass)。
 
-    通过以上代码流程可以得知，BaseDexClassLoader的findClass流程：BaseDexClassLoader.findClass-->DexPathList.findClass-->Element[] findClass-->DexFile.loadClassBinaryName-->defineClass-->defineClassNative，最终到native层去加载类。
-
-* ##### <span id="forName"> Class.forName(String name) </span>加载类过程
+* ##### <span id="forName"> Class.forName(String name) </span>查找类过程
 
 ```java
 public static Class<?> forName(String className) throws ClassNotFoundException {
@@ -380,14 +385,242 @@ mirror::Class* ClassLinker::FindClass(Thread* self,
 
 查找类主要做了以下工作
 
-1. 是否为原始类型(int、short、long、char、double、float，byte等)。
+1. 是否为原始类型(int、short、long、char、double、float，byte，boolean等)。
 2. 缓存中查找。
 3. 是否为原始类型数组。
 4. 是否为数组类型。
 5. 通过继承自BaseDexClassLoader递归查找，结束条件parent为以下情况：
    1. BootClassLoader。
    2. ClassLoader(非PathClassLoader、DexClassLoader)，直接查找失败。
-6. 通过java层ClassLoader的loadClass去加载。
+6. 回调java层通过ClassLoader的loadClass去查找。
 7. 验证Class.forName(String name)返回的类的类名是否与name相同。
 
 * ##### <span id="system">System.loadLibrary(String name)</span>
+
+```java
+public static void loadLibrary(String libname) {
+    Runtime.getRuntime().loadLibrary0(VMStack.getCallingClassLoader(), libname);
+}
+```
+
+```java
+//Runtime
+void loadLibrary0(Class<?> fromClass, String libname) {
+    ClassLoader classLoader = ClassLoader.getClassLoader(fromClass);
+    loadLibrary0(classLoader, fromClass, libname);
+}
+
+synchronized void loadLibrary0(ClassLoader loader, String libname) {
+    String libraryName = libname;
+    if (loader != null) {
+      //1.交由ClassLoader根据so库名称查找绝对路径包括库名称
+      String filename = loader.findLibrary(libraryName);
+      String error = doLoad(filename, loader);
+      return;
+    }
+  	//通过so库获取完整库名 如 log-->liblog.so
+    String filename = System.mapLibraryName(libraryName);
+    List<String> candidates = new ArrayList<String>();
+    String lastError = null;
+    //2.遍历lib path目录拼接库名得到绝对路径去加载
+    for (String directory : getLibPaths()) {
+      String candidate = directory + filename;
+      candidates.add(candidate);
+      if (IoUtils.canOpenReadOnly(candidate)) {
+        //3.根据库绝对路径加载
+        String error = doLoad(candidate, loader);
+        if (error == null) {
+          return; // We successfully loaded the library. Job done.
+        }
+      }
+    }
+}
+private String[] getLibPaths() {
+  	mLibPaths = initLibPaths();
+    return mLibPaths;
+}
+//获取系统so库目录，/system/lib:/system_ext/lib等
+private static String[] initLibPaths() {
+    String javaLibraryPath = System.getProperty("java.library.path");
+    String[] paths = javaLibraryPath.split(":");
+    for (int i = 0; i < paths.length; ++i) {
+      if (!paths[i].endsWith("/")) {
+        paths[i] += "/";
+      }
+    }
+    return paths;
+}
+```
+
+主要做以下事情：
+
+1. 如果ClassLoader不为空(加载app或系统的so库)，通过ClassLoader获取库绝对路径。
+2. 如果ClassLoader为空(加载系统的so库)，遍历系统lib目录尝试获取库绝对路径。
+3. 根据绝对路径加载so库。
+
+* <span id="clsopath">通过ClassLoader获取so绝对路径</span>
+
+```java
+//BaseDexClassLoader
+//nativeLibraryPathElements  集合中包含系统路径，
+//nativeLibraryDirectories   不包含系统路径
+//-------------------------------初始化部分代码-------------------------------------------
+//nativeLibraryDirectories = splitPaths(librarySearchPath, false);
+//systemNativeLibraryDirectories = splitPaths(System.getProperty("java.library.path"),true);
+//List<File> allNativeLibraryDirectories = new ArrayList<>(nativeLibraryDirectories);
+//allNativeLibraryDirectories.addAll(systemNativeLibraryDirectories);
+//nativeLibraryPathElements = makePathElements(allNativeLibraryDirectories);
+//--------------------------------------------------------------------------------------
+public String findLibrary(String name) {
+    return pathList.findLibrary(name);
+}
+//DexPathList
+public String findLibrary(String libraryName) {
+    String fileName = System.mapLibraryName(libraryName);//获取so文件名
+    for (NativeLibraryElement element : nativeLibraryPathElements) {
+      String path = element.findNativeLibrary(fileName);
+      if (path != null) {
+        return path;
+      }
+    }
+    return null;
+}
+//NativeLibraryElement
+public String findNativeLibrary(String name) {
+    maybeInit();
+   //如果so不在zip文件中，直接返回绝对路径
+    if (zipDir == null) {
+      String entryPath = new File(path, name).getPath();
+      if (IoUtils.canOpenReadOnly(entryPath)) {
+        return entryPath;
+      }
+    } else if (urlHandler != null) {
+      //如果在zip文件中，返回指向zip中so库的特殊路径
+      String entryName = zipDir + '/' + name;
+      if (urlHandler.isEntryStored(entryName)) {
+        return path.getPath() + zipSeparator + entryName;
+      }
+    }
+    return null;
+}
+```
+
+返回库绝对路径有两种方式：
+
+1. 目录拼接库名称。
+2. zip文件拼接指向库的特殊路径。
+
+* <span id="loadso">加载so库</span>
+
+```java
+//Runtime
+private String doLoad(String name, ClassLoader loader) {
+    String librarySearchPath = null;
+    //1.获取BaseDexClassLoader的所以so库路径
+    if (loader != null && loader instanceof BaseDexClassLoader) {
+        BaseDexClassLoader dexClassLoader = (BaseDexClassLoader) loader;
+        //由上面DexPathList.findLibrary注释可知，该路径不包含系统路径
+        librarySearchPath = dexClassLoader.getLdLibraryPath();
+    }
+    synchronized (this) {
+        return nativeLoad(name, loader, librarySearchPath);
+    }
+}
+private static native String nativeLoad(String filename, ClassLoader loader,
+                                            String librarySearchPath);
+```
+
+```c
+//libcore/ojluni/src/main/native/Runtime.c
+JNIEXPORT jstring JNICALL
+Runtime_nativeLoad(JNIEnv* env, jclass ignored, jstring javaFilename,
+                   jobject javaLoader, jstring javaLibrarySearchPath)
+{
+    return JVM_NativeLoad(env, javaFilename, javaLoader, javaLibrarySearchPath);
+}
+//libcore/ojluni/src/main/native/jvm.h
+//art/runtime/openjdkjvm/OpenjdkJvm.cc
+JNIEXPORT jstring 
+JVM_NativeLoad(JNIEnv* env,jstring javaFilename,jobject javaLoader,jstring javaLibrarySearchPath) {
+  ScopedUtfChars filename(env, javaFilename);
+  if (filename.c_str() == NULL) {
+    return NULL;
+  }
+  std::string error_msg;
+  {
+    art::JavaVMExt* vm = art::Runtime::Current()->GetJavaVM();
+    bool success = vm->LoadNativeLibrary(env,filename.c_str(),
+                                         avaLoader,avaLibrarySearchPath,&error_msg);
+    if (success) {
+      return nullptr;
+    }
+  }
+  // Don't let a pending exception from JNI_OnLoad cause a CheckJNI issue with NewStringUTF.
+  env->ExceptionClear();
+  return env->NewStringUTF(error_msg.c_str());
+}
+//art/runtime/java_vm_ext.cc
+bool JavaVMExt::LoadNativeLibrary(JNIEnv* env,
+                                  const std::string& path,
+                                  jobject class_loader,
+                                  jstring library_path,
+                                  std::string* error_msg) {
+  SharedLibrary* library;
+  Thread* self = Thread::Current();
+  //2.如果已经加载过so，返回加载成功
+  {
+    MutexLock mu(self, *Locks::jni_libraries_lock_);
+    library = libraries_->Get(path);
+  }
+  if (library != nullptr) {
+    if (library->GetClassLoaderAllocator() != class_loader_allocator) { return false; }
+    if (!library->CheckOnLoadResult()) {return false;}
+    return true;
+  }
+  Locks::mutator_lock_->AssertNotHeld(self);
+  const char* path_str = path.empty() ? nullptr : path.c_str();
+  bool needs_native_bridge = false;
+  //3.dlopen打开so库
+  //system/core/libnativeloader/native_loader.cpp
+  void* handle = android::OpenNativeLibrary(env,runtime_->GetTargetSdkVersion(),
+                 path_str,class_loader,library_path,&needs_native_bridge,error_msg);
+  if (handle == nullptr) {
+    return false;
+  }
+  bool created_library = false;
+  {
+    //4.创建ShareLibrary并添加到map<so绝对路径,so实例>中
+    std::unique_ptr<SharedLibrary> new_library(
+        new SharedLibrary(env,self,path,handle,needs_native_bridge,
+                          class_loader,class_loader_allocator));
+    MutexLock mu(self, *Locks::jni_libraries_lock_);
+    library = libraries_->Get(path);
+    if (library == nullptr) {  // We won race to get libraries_lock.
+      library = new_library.release();
+      libraries_->Put(path, library);
+      created_library = true;
+    }
+  }
+  if (!created_library) {
+    return library->CheckOnLoadResult();
+  }
+  bool was_successful = false;
+  //5.查找so库是否有JNI_OnLoad函数，如果有则调用
+  void* sym = library->FindSymbol("JNI_OnLoad", nullptr);
+  if (sym == nullptr) {
+    was_successful = true;
+  } else {
+    //调用JNI_OnLoad
+  }
+  library->SetResult(was_successful);
+  return was_successful;
+}
+```
+
+主要做了以下工作：
+
+1. 获取BaseDexClassLoader所有so库的路径，作为搜索路径，如果so引用了其他so库，可以在该路径搜索。
+2. 如果已经加载过so，返回加载成功。
+3. dlopen打开so库。
+4. 创建ShareLibrary并添加到map<so绝对路径,so实例>中。
+5. 查找so库是否有JNI_OnLoad函数，如果有则调用。
