@@ -1,3 +1,17 @@
+### ClassLoader知识点目录
+
+* ##### 继承关系
+
+* ##### 双亲委派
+
+* ##### 类加载流程
+
+  * [通过ClassLoader加载](#classLoader)
+    * [缓存查找过程](#findCache)
+    * [通过继承委派加载类](#findExtend)
+  * [通过Class.forName(String name)加载](#forName)
+  * [so加载(System.load)](#system)
+
 #### 继承关系
 
 * ClassLoader
@@ -11,14 +25,16 @@
 
     DexClassLoader与PathClassLoader的不同在于是否传入了优化目录optimizedDirectory。
 
-#### 双亲委托
+#### 双亲委派
 
 * 构造时需传入ClassLoader(装饰器模式)
-* 继承关系(多态)
+* 继承委派(多态)
 
-#### 加载流程
+#### 类加载流程
 
-通过类加载器直接调用loadClass(String name)
+* ##### <span id="loadClass">通过ClassLoader加载</span>
+
+通过loadClass(String name)
 
 ```java
 public Class<?> loadClass(String name) throws ClassNotFoundException {
@@ -26,7 +42,7 @@ public Class<?> loadClass(String name) throws ClassNotFoundException {
 }
 ```
 
-或直接调用loadClass(name, false)
+或直接调用loadClass(String name, boolean resolve)
 
 ```java
 protected Class<?> loadClass(String name, boolean resolve)
@@ -60,9 +76,9 @@ protected Class<?> loadClass(String name, boolean resolve)
 
 2. 如果父类加载器parent不为空，有parent去加载(装饰器委托)，2.2中不做任何事情。
 
-3. 如果未加载到，则自己加载(继承委托) 。
+3. 如果未加载到，则自己(默认由BaseDexClassLoader)加载(继承委派) 。
 
-* 缓存查找过程
+* <span id="findCache">缓存查找过程</span>
 
   * ```java
     protected final Class<?> findLoadedClass(String name) {
@@ -128,7 +144,7 @@ protected Class<?> loadClass(String name, boolean resolve)
   1. 查找该类的类加载器是否已经加载过该类。
   2. 查找该类的类加载器的父加载器parent是否加载过该类。
 
-* 通过继承委托加载类
+* <span id="findExtend">通过继承委派加载类</span>
 
   ClassLoader的findClass未实现
 
@@ -215,11 +231,10 @@ protected Class<?> loadClass(String name, boolean resolve)
 
     通过以上代码流程可以得知，BaseDexClassLoader的findClass流程：BaseDexClassLoader.findClass-->DexPathList.findClass-->Element[] findClass-->DexFile.loadClassBinaryName-->defineClass-->defineClassNative，最终到native层去加载类。
 
-#### <span id="forName">Class.forName(String name) </span>加载类过程
+* ##### <span id="forName"> Class.forName(String name) </span>加载类过程
 
 ```java
-public static Class<?> forName(String className)
-            throws ClassNotFoundException {
+public static Class<?> forName(String className) throws ClassNotFoundException {
     Class<?> caller = Reflection.getCallerClass();
     return forName(className, true, ClassLoader.getClassLoader(caller));
 }
@@ -374,3 +389,5 @@ mirror::Class* ClassLinker::FindClass(Thread* self,
    2. ClassLoader(非PathClassLoader、DexClassLoader)，直接查找失败。
 6. 通过java层ClassLoader的loadClass去加载。
 7. 验证Class.forName(String name)返回的类的类名是否与name相同。
+
+* ##### <span id="system">System.loadLibrary(String name)</span>
