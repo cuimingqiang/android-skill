@@ -16,31 +16,26 @@
   
 * ##### [类加载](#LoadClass)
 
-  * 加载
-  * 链接
-    * 验证
-    * 准备
-    * 解析
-  * 使用
-  * 卸载
+  * [JVM规范中定义类加载过程](#JVMLoadClass)
+  * [Android虚拟机类加载实现](#AndroidLoadClass)
 
 #### <span id="Inherit">继承关系</span>
 
 * ClassLoader
 
-  * BootClassLoader
+  * BootClassLoader 加载Framework
 
   * BaseDexClassLoader
 
     * DexClassLoader
-    * PathClassLoader
+    * PathClassLoader 加载应用
 
     DexClassLoader与PathClassLoader的不同在于是否传入了优化目录optimizedDirectory。
 
 #### <span id="Parent">双亲委派</span>
 
-* 构造时需传入ClassLoader(装饰器模式)
-* 继承委派(多态)
+* 装饰器模式委派(构造时需传入ClassLoader
+* 多态委派(重写父类方法)
 
 #### <span id="FindClass">类查找流程</span>
 
@@ -317,7 +312,7 @@ static jclass Class_classForName(JNIEnv* env, jclass, jstring javaName, jboolean
     return nullptr;
   }
   if (initialize) {
-    //3.初始化类，比如静态字段、构造器、接口默认方法以及父类。
+    //3.初始化类，比如静态字段、静态构造器、接口默认方法以及父类。
     class_linker->EnsureInitialized(soa.Self(), c, true, true);
   }
   return soa.AddLocalReference<jclass>(c.Get());
@@ -328,7 +323,7 @@ Class.forName主要三件事
 
 1. 检查类名字符串是否合法。
 2. 通过ClassLinker根据传入的ClassLoader去FindClass。
-3. 初始化类，比如静态字段、构造器、接口默认方法以及父类。
+3. 初始化类，比如静态字段、静态构造器、接口默认方法以及父类。
 
 ClassLinker->FindClass的过程
 
@@ -518,14 +513,14 @@ public String findLibrary(String libraryName) {
 //NativeLibraryElement
 public String findNativeLibrary(String name) {
     maybeInit();
-   //如果so不在zip文件中，直接返回绝对路径
+   //如果不是zip文件，直接返回绝对路径
     if (zipDir == null) {
       String entryPath = new File(path, name).getPath();
       if (IoUtils.canOpenReadOnly(entryPath)) {
         return entryPath;
       }
     } else if (urlHandler != null) {
-      //如果在zip文件中，返回指向zip中so库的特殊路径
+      //如果是zip文件，返回指向zip中so库的特殊路径
       String entryName = zipDir + '/' + name;
       if (urlHandler.isEntryStored(entryName)) {
         return path.getPath() + zipSeparator + entryName;
@@ -546,10 +541,9 @@ public String findNativeLibrary(String name) {
 //Runtime
 private String doLoad(String name, ClassLoader loader) {
     String librarySearchPath = null;
-    //1.获取BaseDexClassLoader的所以so库路径
+    //1.获取BaseDexClassLoader的所有so库路径
     if (loader != null && loader instanceof BaseDexClassLoader) {
         BaseDexClassLoader dexClassLoader = (BaseDexClassLoader) loader;
-        //由上面DexPathList.findLibrary注释可知，该路径不包含系统路径
         librarySearchPath = dexClassLoader.getLdLibraryPath();
     }
     synchronized (this) {
@@ -558,6 +552,18 @@ private String doLoad(String name, ClassLoader loader) {
 }
 private static native String nativeLoad(String filename, ClassLoader loader,
                                             String librarySearchPath);
+//BaseDexClassLoader
+public String getLdLibraryPath() {
+    StringBuilder result = new StringBuilder();
+    //由上面DexPathList.findLibrary注释可知，该路径不包含系统路径
+    for (File directory : pathList.getNativeLibraryDirectories()) {
+      if (result.length() > 0) {
+        result.append(':');
+      }
+      result.append(directory);
+    }
+    return result.toString();
+}
 ```
 
 ```c
@@ -657,7 +663,33 @@ bool JavaVMExt::LoadNativeLibrary(JNIEnv* env,
 
 #### <span id="LoadClass">类加载</span>
 
-同上节类查找流程可知，类的加载通过该函数实现：
+* <span id="JVMLoadClass">JVM规范中定义类加载过程：</span>
+  * 加载
+    * 全限定名加载类的二进制流
+    * 字节流所代表的静态结构转换成方法区的运行时数据结构
+    * 在内存中生成代表这个类的Class对象，作为方法区这个类的各种数据的入口
+  * 链接
+    * 验证
+      * 文件格式验证
+      * 元数据验证
+      * 字节码验证
+      * 符号引用验证
+    * 准备
+      * 为类变量分配内存空间
+    * 解析(常量池中符号引用替换为直接引用)
+      * 类或接口解析
+      * 字段解析
+      * 方法解析
+      * 接口方法解析
+  * 初始化
+    * 父类
+    * 如静态字段
+    * 静态构造器
+    * 接口默认方法
+  * 使用
+  * 卸载
+
+* <span id="AndroidLoadClass">Android虚拟机类加载实现：</span>
 
 ```c++
 //art/runtime/class_linker.cc
@@ -666,7 +698,7 @@ mirror::Class* ClassLinker::DefineClass(Thread* self,const char* descriptor,
                                         const DexFile::ClassDef& dex_class_def) {
   StackHandleScope<3> hs(self);
   auto klass = hs.NewHandle<mirror::Class>(nullptr);
-  //1.分配类空间
+  //1.分配dex数据空间
  	//如果类是Object、Class、String、Reference、DexCache、ClassExt
   //直接使用预定义的AllocClass对象
   //...
@@ -676,17 +708,16 @@ mirror::Class* ClassLinker::DefineClass(Thread* self,const char* descriptor,
   }
   DexFile const* new_dex_file = nullptr;
   DexFile::ClassDef const* new_class_def = nullptr;
-  //2.通过运行时回调监听类加载过程或者Hook类加载行为
+  //通过运行时回调监听类加载过程或者Hook类加载行为
   Runtime::Current()->GetRuntimeCallbacks()->ClassPreDefine(descriptor,klass,
              class_loader,dex_file,dex_class_def,&new_dex_file,&new_class_def);
-	//3.解析DexFile成Dex数据结构
+	//解析DexFile成Dex数据结构
   //包括type、String、field、method、CallSite(GC的安全点或区域)
   //art/runtime/mirror/dex_cache.cc --> InitializeDexCache
   ObjPtr<mirror::DexCache> dex_cache = RegisterDexFile(*new_dex_file, class_loader.Get());
   klass->SetDexCache(dex_cache);
-  //设置类对象信息，如访问权限、dexCache中的索引等
+  //2.加载类对象信息，如访问权限、dexCache中的索引等
   SetupClass(*new_dex_file, *new_class_def, klass, class_loader.Get());
-
   ObjectLock<mirror::Class> lock(self, klass);
   klass->SetClinitThreadId(self->GetTid());
   // Make sure we have a valid empty iftable even if there are errors.
@@ -696,78 +727,60 @@ mirror::Class* ClassLinker::DefineClass(Thread* self,const char* descriptor,
   if (existing != nullptr) {
     return EnsureResolved(self, descriptor, existing);
   }
-	//
+	//调用LoadClassMembers(不允许线程挂起)，分配静态字段、成员字段、非Virtual方法、Virtual方法空间并赋值
+  //包括静态方法、jni方法、非虚方法等插入Trampoline跳板
   LoadClass(self, *new_dex_file, *new_class_def, klass);
-  if (self->IsExceptionPending()) {
-    VLOG(class_linker) << self->GetException()->Dump();
-    // An exception occured during load, set status to erroneous while holding klass' lock in case
-    // notification is necessary.
-    if (!klass->IsErroneous()) {
-      mirror::Class::SetStatus(klass, mirror::Class::kStatusErrorUnresolved, self);
-    }
-    return nullptr;
-  }
-
-  // Finish loading (if necessary) by finding parents
-  CHECK(!klass->IsLoaded());
+  //加载父类和接口的类对象
   if (!LoadSuperAndInterfaces(klass, *new_dex_file)) {
     // Loading failed.
-    if (!klass->IsErroneous()) {
-      mirror::Class::SetStatus(klass, mirror::Class::kStatusErrorUnresolved, self);
-    }
-    return nullptr;
   }
   CHECK(klass->IsLoaded());
-
-  // At this point the class is loaded. Publish a ClassLoad event.
-  // Note: this may be a temporary class. It is a listener's responsibility to handle this.
+	//通过运行时回调类加载完成
   Runtime::Current()->GetRuntimeCallbacks()->ClassLoad(klass);
-
-  // Link the class (if necessary)
-  CHECK(!klass->IsResolved());
-  // TODO: Use fast jobjects?
+	//3.类链接
+  //3.1准备父类，会验证父类不是final、interface、和自己是否能够访问
+  //3.2初始化ifTable，包括父类实现的接口，自己实现的接口(包括接口继承的接口)
+  //3.3初始化vTable，继承父类的vTable并有相同的索引，如果重新父类方法，则方法入口指向自己的实现地址。
+  //3.4关联ifTable每个接口的vTable与vTable的映射
+  //3.5按照引用对象大小、64位(long,double)、32位(int,float)、16位(short,char)、8位(byte,boolean)排序成员字段。初始化字段信息，比如所属类、类型、访问权限等。
+  //3.6如3.5初始化静态字段。
+  //3.7计算引用对象内存偏移位置
   auto interfaces = hs.NewHandle<mirror::ObjectArray<mirror::Class>>(nullptr);
-
   MutableHandle<mirror::Class> h_new_class = hs.NewHandle<mirror::Class>(nullptr);
   if (!LinkClass(self, descriptor, klass, interfaces, &h_new_class)) {
     // Linking failed.
-    if (!klass->IsErroneous()) {
-      mirror::Class::SetStatus(klass, mirror::Class::kStatusErrorUnresolved, self);
-    }
     return nullptr;
   }
-  self->AssertNoPendingException();
-  CHECK(h_new_class != nullptr) << descriptor;
-  CHECK(h_new_class->IsResolved() && !h_new_class->IsErroneousResolved()) << descriptor;
-
-  // Instrumentation may have updated entrypoints for all methods of all
-  // classes. However it could not update methods of this class while we
-  // were loading it. Now the class is resolved, we can update entrypoints
-  // as required by instrumentation.
+  // 更新方法入口地址
   if (Runtime::Current()->GetInstrumentation()->AreExitStubsInstalled()) {
-    // We must be in the kRunnable state to prevent instrumentation from
-    // suspending all threads to update entrypoints while we are doing it
-    // for this class.
-    DCHECK_EQ(self->GetState(), kRunnable);
     Runtime::Current()->GetInstrumentation()->InstallStubsForClass(h_new_class.Get());
   }
-
-  /*
-   * We send CLASS_PREPARE events to the debugger from here.  The
-   * definition of "preparation" is creating the static fields for a
-   * class and initializing them to the standard default values, but not
-   * executing any code (that comes later, during "initialization").
-   *
-   * We did the static preparation in LinkClass.
-   *
-   * The class has been prepared and resolved but possibly not yet verified
-   * at this point.
-   */
+  //通知类已经准备完成
   Runtime::Current()->GetRuntimeCallbacks()->ClassPrepare(klass, h_new_class);
-
   // Notify native debugger of the new class and its layout.
   jit::Jit::NewTypeLoadedIfUsingJit(h_new_class.Get());
-
   return h_new_class.Get();
 }
 ```
+
+该过程完成了JVM规范的类的加载、链接(验证、准备、解析)阶段，主要内容如下：
+
+1. 解析dex文件格式并缓存在内存。
+2. 加载类信息，包括接口和父类，分配字段、方法等空间。
+3. 类链接，初始化类对象布局。
+
+而类初始化由以下函数完成：
+
+```c++
+//art/runtime/class_linker.cc
+bool ClassLinker::InitializeClass(Thread* self, Handle<mirror::Class> klass,
+                                  bool can_init_statics, bool can_init_parents) 
+```
+
+其中涉及到的数据结构：
+
+* IfTable 类实现的接口表。位于art/runtime/mirror/iftable.h
+* vTable(PointerArray) 虚方法表(除静态、构造、私有函数之外)。子类会继承父类的虚方法表，所以重写父类函数，只是替换虚方法表中的函数入口地址。
+  * 具有相同签名的方法名。
+  * 父类和子类中方法索引也应相同。
+* ClassTable 每一个ClassLoader都有一个类表，记录已加载过的类。位于art/runtime/class_table.h

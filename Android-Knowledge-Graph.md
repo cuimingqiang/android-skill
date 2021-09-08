@@ -106,27 +106,11 @@
 
 ### JVM
 
-* JMM
+* [字节码](JVM/ClassLoader/ByteCode.md)
 * 运行时数据区
+* JMM
 * GC
-  * 标记算法
-  * 回收算法
-* 字节码
-  * class
-  * 执行引擎
 * [ClassLoader](JVM/ClassLoader/ClassLoader.md)
-  * 类加载
-    * 加载
-    * 链接
-      * 验证
-      * 准备
-      * 解析
-    * 使用
-    * 卸载
-  * [Hook](JVM/ClassLoader/Hook.md)
-    * Android Hook点
-    * 重排Element数组
-    * 重写类加载器
 * Android JVM
   * Dex
   * Dalvik VM
@@ -194,8 +178,11 @@
 
 ### 热修复
 
+* Android类加载Hook点
 * 方法修复(Native方法替换)
 * dex修复
+  * 重排Element数组
+  * 重写类加载器
 
 ### 组件化
 
