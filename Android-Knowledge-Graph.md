@@ -106,15 +106,12 @@
 
 ### JVM
 
-* [字节码](JVM/ClassLoader/ByteCode.md)
-* 运行时数据区
-* JMM
-* GC
+* [字节码](JVM/ByteCode/ByteCode.md)
+* [运行时数据区](JVM/Runtime/RuntimeData.md)
+* [JMM](JVM/JMM/Main.md)
+* [GC](JVM/GC/Main.md)
 * [ClassLoader](JVM/ClassLoader/ClassLoader.md)
-* Android JVM
-  * Dex
-  * Dalvik VM
-  * Art VM
+* [Android JVM](JVM/AndroidJVM/Main.md)
 
 ### Framework
 
@@ -178,7 +175,7 @@
 
 ### 热修复
 
-* Android类加载Hook点
+* Android类加载器Hook点
 * 方法修复(Native方法替换)
 * dex修复
   * 重排Element数组
@@ -261,4 +258,10 @@
   * mars
 
 ### Flutter
+
+* Dart
+* 线程模型
+
+* UI
+* Plugin
 
