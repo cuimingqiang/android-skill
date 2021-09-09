@@ -102,16 +102,21 @@
 
 ### Kotlin
 
-* 协程
+- [ ] 协程
 
 ### JVM
 
-* [字节码](JVM/ByteCode/ByteCode.md)
-* [运行时数据区](JVM/Runtime/RuntimeData.md)
-* [JMM](JVM/JMM/Main.md)
-* [GC](JVM/GC/Main.md)
-* [ClassLoader](JVM/ClassLoader/ClassLoader.md)
-* [Android JVM](JVM/AndroidJVM/Main.md)
+- [x] [字节码](JVM/ByteCode/ByteCode.md)
+
+- [x] [运行时数据区](JVM/Runtime/RuntimeData.md)
+
+- [x] [JMM](JVM/JMM/Main.md)
+
+- [ ] [GC](JVM/GC/Main.md)
+
+- [x] [ClassLoader](JVM/ClassLoader/ClassLoader.md)
+
+- [x] [Android VM](JVM/AndroidVM/Main.md)
 
 ### Framework
 

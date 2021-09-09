@@ -30,18 +30,18 @@
     * DexClassLoader
     * PathClassLoader 加载应用
 
-    DexClassLoader与PathClassLoader的不同在于是否传入了优化目录optimizedDirectory。
+    `DexClassLoader与PathClassLoader的不同在于是否传入了优化目录optimizedDirectory。`
 
 #### <span id="Parent">双亲委派</span>
 
-* 装饰器模式委派(构造时需传入ClassLoader
+* 装饰器模式委派(构造时需传入ClassLoader)
 * 多态委派(重写父类方法)
 
 #### <span id="FindClass">类查找流程</span>
 
 * ##### <span id="byClassLoader">通过ClassLoader查找</span>
 
-通过loadClass(String name)
+> 通过loadClass(String name)
 
 ```java
 public Class<?> loadClass(String name) throws ClassNotFoundException {
@@ -49,7 +49,7 @@ public Class<?> loadClass(String name) throws ClassNotFoundException {
 }
 ```
 
-或直接调用loadClass(String name, boolean resolve)
+> 或直接调用loadClass(String name, boolean resolve)
 
 ```java
 protected Class<?> loadClass(String name, boolean resolve)
@@ -77,13 +77,13 @@ protected Class<?> loadClass(String name, boolean resolve)
 }
 ```
 
-主要做了以下三个工作：
-
-1. 在缓存中查找是否加载过该类。
-
-2. 如果父类加载器parent不为空，通过parent去加载(装饰器委派)。
-
-3. 如果未加载到，则自己(默认由BaseDexClassLoader)加载(继承委派) 。
+> 主要做了以下三个工作：
+>
+> 1. 在缓存中查找是否加载过该类。
+>
+> 2. 如果父类加载器parent不为空，通过parent去加载(装饰器委派)。
+>
+> 3. 如果未加载到，则自己(默认由BaseDexClassLoader)加载(继承委派) 。
 
 * <span id="findCache">缓存查找过程</span>
 
@@ -146,14 +146,14 @@ protected Class<?> loadClass(String name, boolean resolve)
     }
     ```
 
-  缓存查找主要做了如下工作
-
-  1. 查找该类的类加载器是否已经加载过该类。
-  2. 查找该类的类加载器的父加载器parent是否加载过该类。
+  > 缓存查找主要做了如下工作
+  >
+  > 1. 查找该类的类加载器是否已经加载过该类。
+  > 2. 查找该类的类加载器的父加载器parent是否加载过该类。
 
 * <span id="findExtend">通过继承委派查找</span>
 
-  ClassLoader的findClass未实现
+  > ClassLoader的findClass未实现
 
   ```java
   protected Class<?> findClass(String name) throws ClassNotFoundException {
@@ -250,7 +250,7 @@ protected Class<?> loadClass(String name, boolean resolve)
       }
       ```
     
-    通过以上代码流程可以得知，BaseDexClassLoader的findClass流程：BaseDexClassLoader.findClass-->DexPathList.findClass-->Element[] findClass-->DexFile.loadClassBinaryName-->defineClass-->defineClassNative，最终到native层去[加载类](#LoadClass)。
+    > 通过以上代码流程可以得知，BaseDexClassLoader的findClass流程：BaseDexClassLoader.findClass-->DexPathList.findClass-->Element[] findClass-->DexFile.loadClassBinaryName-->defineClass-->defineClassNative，最终到native层去[加载类](#LoadClass)。
 
 * ##### <span id="forName"> Class.forName(String name) </span>查找类过程
 
@@ -319,13 +319,13 @@ static jclass Class_classForName(JNIEnv* env, jclass, jstring javaName, jboolean
 }
 ```
 
-Class.forName主要三件事
+> Class.forName主要三件事
+>
+> 1. 检查类名字符串是否合法。
+> 2. 通过ClassLinker根据传入的ClassLoader去FindClass。
+> 3. 初始化类，比如静态字段、静态构造器、接口默认方法以及父类。
 
-1. 检查类名字符串是否合法。
-2. 通过ClassLinker根据传入的ClassLoader去FindClass。
-3. 初始化类，比如静态字段、静态构造器、接口默认方法以及父类。
-
-ClassLinker->FindClass的过程
+###### ClassLinker->FindClass的过程
 
 ```c++
 //class_linker.cc
@@ -408,17 +408,17 @@ bool ClassLinker::FindClassInBaseDexClassLoader(ScopedObjectAccessAlreadyRunnabl
 }
 ```
 
-查找类主要做了以下工作
-
-1. 是否为原始类型(int、short、long、char、double、float，byte，boolean等)。
-2. 缓存中查找。
-3. 是否为原始类型数组。
-4. 是否为数组类型。
-5. 通过继承自BaseDexClassLoader递归查找，结束条件parent为以下情况：
-   1. BootClassLoader。
-   2. ClassLoader(非PathClassLoader、DexClassLoader)，直接查找失败。
-6. 回调java层通过ClassLoader的loadClass去查找。
-7. 验证Class.forName(String name)返回的类的类名是否与name相同。
+> 查找类主要做了以下工作
+>
+> 1. 是否为原始类型(int、short、long、char、double、float，byte，boolean等)。
+> 2. 缓存中查找。
+> 3. 是否为原始类型数组。
+> 4. 是否为数组类型。
+> 5. 通过继承自BaseDexClassLoader递归查找，结束条件parent为以下情况：
+>    1. BootClassLoader。
+>    2. ClassLoader(非PathClassLoader、DexClassLoader)，直接查找失败。
+> 6. 回调java层通过ClassLoader的loadClass去查找。
+> 7. 验证Class.forName(String name)返回的类的类名是否与name相同。
 
 * ##### <span id="system">System.loadLibrary(String name)</span>
 
@@ -477,11 +477,11 @@ private static String[] initLibPaths() {
 }
 ```
 
-主要做以下事情：
-
-1. 如果ClassLoader不为空(加载app或系统的so库)，通过ClassLoader获取库绝对路径。
-2. 如果ClassLoader为空(加载系统的so库)，遍历系统lib目录尝试获取库绝对路径。
-3. 根据绝对路径加载so库。
+> 主要做以下事情：
+>
+> 1. 如果ClassLoader不为空(加载app或系统的so库)，通过ClassLoader获取库绝对路径。
+> 2. 如果ClassLoader为空(加载系统的so库)，遍历系统lib目录尝试获取库绝对路径。
+> 3. 根据绝对路径加载so库。
 
 * <span id="clsopath">通过ClassLoader获取so绝对路径</span>
 
@@ -530,10 +530,10 @@ public String findNativeLibrary(String name) {
 }
 ```
 
-返回库绝对路径有两种方式：
-
-1. 目录拼接库名称。
-2. zip文件拼接指向库的特殊路径。
+> 返回库绝对路径有两种方式：
+>
+> 1. 目录拼接库名称。
+> 2. zip文件拼接指向库的特殊路径。
 
 * <span id="loadso">加载so库</span>
 
@@ -653,13 +653,13 @@ bool JavaVMExt::LoadNativeLibrary(JNIEnv* env,
 }
 ```
 
-主要做了以下工作：
-
-1. 获取BaseDexClassLoader所有so库的路径，作为搜索路径，如果so引用了其他so库，可以在该路径搜索。
-2. 如果已经加载过so，返回加载成功。
-3. dlopen打开so库。
-4. 创建ShareLibrary并添加到map<so绝对路径,so实例>中。
-5. 查找so库是否有JNI_OnLoad函数，如果有则调用。
+> 主要做了以下工作：
+>
+> 1. 获取BaseDexClassLoader所有so库的路径，作为搜索路径，如果so引用了其他so库，可以在该路径搜索。
+> 2. 如果已经加载过so，返回加载成功。
+> 3. dlopen打开so库。
+> 4. 创建ShareLibrary并添加到map<so绝对路径,so实例>中。
+> 5. 查找so库是否有JNI_OnLoad函数，如果有则调用。
 
 #### <span id="LoadClass">类加载</span>
 
@@ -763,13 +763,13 @@ mirror::Class* ClassLinker::DefineClass(Thread* self,const char* descriptor,
 }
 ```
 
-该过程完成了JVM规范的类的加载、链接(验证、准备、解析)阶段，主要内容如下：
+> 该过程完成了JVM规范的类的加载、链接(验证、准备、解析)阶段，主要内容如下：
+>
+> 1. 解析dex文件格式并缓存在内存。
+> 2. 加载类信息，包括接口和父类，分配字段、方法等空间。
+> 3. 类链接，初始化类对象布局。
 
-1. 解析dex文件格式并缓存在内存。
-2. 加载类信息，包括接口和父类，分配字段、方法等空间。
-3. 类链接，初始化类对象布局。
-
-而类初始化由以下函数完成：
+类初始化由以下函数完成：
 
 ```c++
 //art/runtime/class_linker.cc

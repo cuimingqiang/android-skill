@@ -1,11 +1,5 @@
 #### Android JVM知识目录
 
-* #### Dex文件结构
-
-  * dex
-  * odex
-  * oat
-
 * #### 虚拟机
 
   * Dalvik 优化
@@ -17,6 +11,23 @@
       * 解释器
       * JIT
       * OAT
+  
+* #### Dex文件
+
+
+#### <span id="jvm">虚拟机</span>
+
+Android虚拟机是基于寄存器，所以速度要快于基于栈的Java虚拟机。从早期的Dalvik虚拟机发展到现在的ART虚拟机(Android 5.0及以后默认虚拟机)。[详细请参考](https://www.jianshu.com/p/bcc4a9209ef5)
+
+##### ART优化
+
+> 从5.0到7.0版本在安装时，PMKS会通过dex2oat静态方式编译dex文件生成oat，所以很耗时。
+
+> 从7.0版本之后采用混合模式，即采用解释器+JIT+OAT的方式，系统会在空闲的时候将dex编译成oat。安装时将dex转换成vdex，主要省去重新校验dex合法性的过程，当虚拟机优化时，会将vdex热点代码抽出编译成odex，所以vdex + odex = dex。5.0之后的odex和之前的odex是不同的。
+
+> 应用的优化目录在data/app/packageName-xx/oat/arch下有两个文件，vdex和odex。而自定义加载dex，优化目录默认在dex所在目录/oat下。
+
+> odex、oat是一种ELF格式文件。
 
 #### <span id="dex">Dex文件结构</span>
 
@@ -27,7 +38,7 @@ dex文件的数据加载到内存对应以下DexFile结构，可以直接通过�
 struct DexFile {
     /* directly-mapped "opt" header */
     const DexOptHeader* pOptHeader;
-	//索引区
+	  //索引区
     /* pointers to directly-mapped structs and arrays in base DEX */
     const DexHeader*    pHeader;
     const DexStringId*  pStringIds;
@@ -93,7 +104,7 @@ struct DexFile {
   struct DexHeader {
       u1  magic[8];           /* includes version number */
       u4  checksum;           /* adler32 checksum */
-      u1  signature[kSHA1DigestLen]; /* SHA-1 hash */
+      u1  signature[kSHA1DigestLen]; /* SHA-1 hash kSHA1DigestLen = 20 */
       u4  fileSize;           /* length of entire file */
       u4  headerSize;         /* offset to start of next section */
       u4  endianTag;
@@ -199,17 +210,7 @@ struct DexFile {
   };
   ```
 
-#### <span id="jvm">虚拟机</span>
 
-Android虚拟机是基于寄存器，所以速度要快于基于栈的Java虚拟机。从早期的Dalvik虚拟机发展到现在的ART虚拟机(Android 5.0及以后默认虚拟机)。
-
-##### ART优化
-
-从5.0到7.0版本在安装时，PMKS会通过dex2oat静态方式编译dex文件生成oat，所以很耗时。
-
-从7.0版本之后采用混合模式，即采用解释器+JIT+OAT的方式，系统会再空闲的时候将dex编译成oat。
-
-[详细请参考](https://www.jianshu.com/p/bcc4a9209ef5)
 
 
 
