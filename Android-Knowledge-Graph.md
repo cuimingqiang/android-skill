@@ -24,7 +24,7 @@
 
 - [ ] [Thumb指令](Assembly/thumb.md)
 
-### linux
+### Linux
 
 - [ ] Syscall
 - [ ] IPC
@@ -52,11 +52,12 @@
 
 ### Java 基础
 
-- [ ] [泛型](Java/Generic/Main.md)
+- [x] [泛型](Java/Generic/Main.md)
 
-- [ ] [注解](Java/Annotation/Main.md)
+- [x] [注解](Java/Annotation/Main.md)
 
 - [ ] [反射](Java/Reflection/Main.md)
+- [ ] [动态代理](Java/Proxy.md)
 
 - [ ] [MethodHandle](Java/MethodHandle/Main.md)
 
@@ -67,6 +68,32 @@
 ### Kotlin
 
 - [ ] 协程
+
+### 架构思想
+
+- [ ] 六大原则
+- [ ] MVC
+- [ ] MVP
+- [ ] MVVM
+- [ ] Bloc
+- [ ] Mobx
+- [ ] Redux
+- [ ] Flux
+
+### 设计模式
+
+- [ ] 创建型 
+- [ ] 结构型
+- [ ] 行为型
+
+### 工具
+
+- [ ] adb
+- [ ] dx
+- [ ] TraceView
+- [ ] Systrace
+- [ ] Android Profiler
+- [ ] Mat
 
 ### JVM
 
@@ -139,6 +166,7 @@
 
 - [ ] 组件间通信
   - [ ] Intent隐式启动
+  - [ ] 类全限定名加载类(Class.forName、ClassLoader.loadClass)
   - [ ] 接口依赖
     - [ ] Hilt注入
     - [ ] AutoService
@@ -216,6 +244,10 @@
   - [ ] mars
   - [ ] Netty
   - [ ] Mqtt
+
+### 逆向
+
+- [ ] 文件格式解析
 
 ### Flutter
 
