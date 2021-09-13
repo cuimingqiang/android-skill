@@ -94,6 +94,7 @@
 - [ ] Systrace
 - [ ] Android Profiler
 - [ ] Mat
+- [ ] IDA
 
 ### JVM
 
