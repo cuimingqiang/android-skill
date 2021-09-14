@@ -36,7 +36,7 @@
 
 * invokeInterface
 
-  > 调用接口方法，在运行时搜索一个实现了该接口方法的对象，找出合适的方法调用。每次都不得不重写搜索一下方法表，因为虚拟机不能假设这一次的偏移量与上一次的偏移量相同(因为接口可以被不同的类实现)。
+  > 调用接口方法，在运行时搜索一个实现了该接口方法的对象，找出合适的方法调用。每次都不得不重写搜索一下方法表，因为虚拟机不能假设这一次的偏移量与上一次的偏移量相同(因为接口可以被不同的类实现，请见方法分派接口实现)。
 
 * invokeDynamic
 
@@ -52,13 +52,13 @@
 
 > 方法的参数
 
-###### 根据宗量多少分类
+* 根据宗量多少分类
 
 > 多分派。
 
 > 单分派。
 
-###### 根据分派时期分类
+* 根据分派时期分类
 
 > 静态分派：重载，编译时绑定方法，类加载解析时完成分派。不仅要考虑方法的接收者，还要考虑方法的参数，所以静态分派属于多分派。
 
@@ -66,11 +66,64 @@
 
 ###### 实现
 
-* 类
-  ###### 虚方法表(vTable)
+```java
+public abstract class ClassBase implements View.OnClickListener {
+    public abstract void Test();
+    public void Test2(){}
 
-  > 1. 子类继承父类虚方法表，如果没重写，方法入口地址指向父类；否则指向子类重写方法入口地址。
-  > 2. 具有相同签名的方法名，父类和子类的虚方法表的方法索引也应相同。
+    @Override
+    public void onClick(View v) {
+
+    }
+}
+public interface ClassDemoInterface {
+    void one();
+    void two();
+}
+public abstract class ClassDemo extends ClassBase implements View.OnLongClickListener, ClassDemoInterface {
+    @Override
+    public void one() {}
+
+    @Override
+    public void two() {}
+
+    @Override
+    public void Test() {}
+
+    @Override
+    public void Test2() {
+        super.Test2();
+    }
+
+    @Override
+    public String toString() {
+        return "ClassDemo{" +
+                "filed='" + filed + '\'' +
+                '}';
+    }
+
+    @Override
+    public boolean onLongClick(View v) {
+        return false;
+    }
+}
+```
+
+* 类虚方法表(vTable)
+
+  <img src="object-vtable.png" alt="Alt text" style="zoom:40%;" />
+
+   <img src="classbase-vtable.png" alt="Alt text" style="zoom:40%;" />
+
+  <img src="classdemo-vtable.png" alt="Alt text" style="zoom:40%;" />
+
+  `具有相同签名的方法名，父类和子类的虚方法表的方法索引也应相同。`
+
+  > ClassBase默认继承Object，同时也继承了其vtable，即0-10的方法索引和地址相同
+
+  `子类继承父类虚方法表，如果没重写，方法入口地址指向父类；否则指向子类重写方法入口地址。`
+
+  > ClassDemo虽然继承自ClassBase，但通过ClassBase同时继承了Object的vtable，重新toString()方法后，其虚方法表中的地址指向了自身的实现，即vtable中索引7。
 
   > 类链接阶段初始化
 
@@ -79,10 +132,16 @@
   > * 继承关系分析CHA
   > * 守护内联
   > * 内联缓存
-* 接口
-  ###### IfTable(所实现接口的集合)
 
-  ###### 虚方法表
+* 接口IfTable(所实现接口的集合)
+  
+  <img src="classbase-iftable.png" alt="Alt text" style="zoom:100%;" />
+
+<img src="classdemo-iftable.png" alt="Alt text" style="zoom:60%;" />
+
+`IfTable是以偶数位置存放接口类信息，奇数存放接口虚方法表的数据结构。`
+
+> 类的IfTable继承父类的IfTable，同时包括接口继承的接口。
 
 #### <span id="methodHandle">MethodHandle</span>
 
