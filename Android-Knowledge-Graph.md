@@ -223,16 +223,16 @@
 - [ ] 插件化
   - [ ] RePlugin
   - [ ] VirtualApk
-
 - [ ] 热修复
 
   - [ ] Tinker
 
   - [ ] sophix
-
 - [ ] Android-skin-support
 - [ ] ARoute
-- [ ] epic
+- [ ] hook
+  - [ ] epic
+  - [ ] HookZz(inline hook)
 - [ ] AOP
   - [ ] aspectJ
 - [ ] 日志
