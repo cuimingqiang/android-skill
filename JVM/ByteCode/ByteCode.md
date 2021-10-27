@@ -123,7 +123,7 @@ public abstract class ClassDemo extends ClassBase implements View.OnLongClickLis
 
   `子类继承父类虚方法表，如果没重写，方法入口地址指向父类；否则指向子类重写方法入口地址。`
 
-  > ClassDemo虽然继承自ClassBase，但通过ClassBase同时继承了Object的vtable，重新toString()方法后，其虚方法表中的地址指向了自身的实现，即vtable中索引7。
+  > ClassDemo虽然继承自ClassBase，但通过ClassBase同时继承了Object的vtable，重写toString()方法后，其虚方法表中的地址指向了自身的实现，即vtable中索引7。
 
   > 类链接阶段初始化
 

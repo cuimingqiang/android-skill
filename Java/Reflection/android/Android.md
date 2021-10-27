@@ -334,247 +334,250 @@ bool HandleCorePlatformApiViolation(T* member,const AccessContext& caller_contex
 
 #### 限制破解
 
-* 降低目标版本
+##### 降低目标版本
 
-  `根据2-3中对targetSdkVersion的检查，只有小于28，即可绕过对反射@hide的方法限制。`
+`根据2-3中对targetSdkVersion的检查，只有小于28，即可绕过对反射@hide的方法限制。`
 
-  <img src="targetsdkversion.png" alt="Alt text" style="zoom:50%;" />
+<img src="targetsdkversion.png" alt="Alt text" style="zoom:50%;" />
 
-  ![Alt text](targetsdkversion-result.png)
+![Alt text](targetsdkversion-result.png)
 
-  > 上图可见通过降低targetSdkVersion仍然可以反射@hide方法。
+> 上图可见通过降低targetSdkVersion仍然可以反射@hide方法。
 
-* 反射元反射方法 [demo](hidereflection)
+##### 反射元反射方法
 
-  `根据1中如果调用放和被调用方同处于一个上下文，即可避免限制。`
+ [demo](hidereflection)
 
-  ###### targetSdkVersion < 30(android 11)
+`根据1中如果调用放和被调用方同处于一个上下文，即可避免限制。`
 
-  ```java
-  public static Method reflect(Class clazz, String name, Class... param) throws Exception {
-      if (Build.VERSION.SDK_INT < 28) return clazz.getDeclaredMethod(name, param);
-      else if (Build.VERSION.SDK_INT < 30) {
-          Method getDeclaredMethod = Class.class.getDeclaredMethod("getDeclaredMethod", String.class, Class[].class);
-          return (Method) getDeclaredMethod.invoke(clazz, name, param);
+* targetSdkVersion < 30(android 11)
+
+```java
+public static Method reflect(Class clazz, String name, Class... param) throws Exception {
+    if (Build.VERSION.SDK_INT < 28) return clazz.getDeclaredMethod(name, param);
+    else if (Build.VERSION.SDK_INT < 30) {
+        Method getDeclaredMethod = Class.class.getDeclaredMethod("getDeclaredMethod", String.class, Class[].class);
+        return (Method) getDeclaredMethod.invoke(clazz, name, param);
+    }
+    return (Method) REFLECT.invoke(null, clazz, name, param);
+}
+```
+
+![Alt text](hide-getDeclaredMethod.png)
+
+> 上述代码使用targetSdkVersion为28、29两个版本，如果30以上仍然会失败，请看GetReflectionCaller方法。
+
+* targetSdkVersion >= 30
+
+```java
+
+//reflection dex
+public static Method reflect(Class clazz,String name,Class... param)throws Exception{
+    Method getDeclaredMethod = Class.class.getDeclaredMethod("getDeclaredMethod",String.class,Class[].class);
+    return (Method) getDeclaredMethod.invoke(clazz,name,param);
+}
+```
+
+```java
+private static void reflection(Context application) throws Exception {
+    File dir = new File(application.getFilesDir(), "hot");
+    if (!dir.exists()) dir.mkdir();
+    File dex = new File(dir, "reflection.dex");
+    if (!dex.exists()) {
+      InputStream inputStream = application.getAssets().open("reflection.dex");
+      dex.createNewFile();
+      FileOutputStream fos = new FileOutputStream(dex);
+      byte[] buffer = new byte[1024];
+      int length = -1;
+      while ((length = inputStream.read(buffer)) != -1) {
+        fos.write(buffer, 0, length);
       }
-      return (Method) REFLECT.invoke(null, clazz, name, param);
+      fos.close();
+      inputStream.close();
+    }
+    DexFile dexFile = new DexFile(dex);
+    Class aClass = dexFile.loadClass("com.cmq.dex.HideReflection", null);
+    REFLECT = aClass.getDeclaredMethod("reflect", Class.class, String.class, Class[].class);
+}
+```
+
+![Alt text](hide-reflection-context.png)
+
+> 通过DexFile的loadClass不传ClassLoader去加载类，那么类的ClassLoader为null，通常这种情况下，被认为是BootstrapClassLoader加载的。
+>
+> 加载类的AccessContext 的Domain是kPlatform。
+
+* 根据2-2修改豁免条件
+
+```java
+//dalvik.system
+public final class VMRuntime {
+/**
+     * Sets the list of exemptions from hidden API access enforcement.
+     *
+     * @param signaturePrefixes
+     *         A list of signature prefixes. Each item in the list is a prefix match on the type
+     *         signature of a blacklisted API. All matching APIs are treated as if they were on
+     *         the whitelist: access permitted, and no logging..
+     */
+    @libcore.api.CorePlatformApi
+    public native void setHiddenApiExemptions(String[] signaturePrefixes);
+}
+```
+
+```c++
+//art/runtime/native/dalvik_system_VMRuntime.cc
+static void VMRuntime_setHiddenApiExemptions(JNIEnv* env,jclass,jobjectArray exemptions) {
+  std::vector<std::string> exemptions_vec;
+  int exemptions_length = env->GetArrayLength(exemptions);
+  for (int i = 0; i < exemptions_length; i++) {
+    jstring exemption = reinterpret_cast<jstring>(env->GetObjectArrayElement(exemptions, i));
+    const char* raw_exemption = env->GetStringUTFChars(exemption, nullptr);
+    exemptions_vec.push_back(raw_exemption);
+    env->ReleaseStringUTFChars(exemption, raw_exemption);
   }
-  ```
 
-  ![Alt text](hide-getDeclaredMethod.png)
+  Runtime::Current()->SetHiddenApiExemptions(exemptions_vec);
+}
+//art/runtime/runtime.h
+void SetHiddenApiExemptions(const std::vector<std::string>& exemptions) {
+   hidden_api_exemptions_ = exemptions;
+}
+const std::vector<std::string>& GetHiddenApiExemptions() {
+    return hidden_api_exemptions_;
+}
+```
 
-  > 上述代码使用targetSdkVersion为28、29两个版本，如果30以上仍然会失败，请看GetReflectionCaller方法。
+```java
+Method forName = Class.class.getDeclaredMethod("forName", String.class);
+Method getDeclaredMethod = Class.class.getDeclaredMethod("getDeclaredMethod", String.class, Class[].class);
+Class<?> vmRuntimeClass = (Class<?>) forName.invoke(null, "dalvik.system.VMRuntime");
+Method getRuntime = (Method) getDeclaredMethod.invoke(vmRuntimeClass, "getRuntime", null);
+Method setHiddenApiExemptions = (Method) getDeclaredMethod.invoke(vmRuntimeClass, "setHiddenApiExemptions", new Class[]{String[].class});
+Object sVmRuntime = getRuntime.invoke(null);
+setHiddenApiExemptions.invoke(sVmRuntime, new Object[]{new String[]{"L"}});
+```
 
-  ###### targetSdkVersion >= 30
+> 豁免条件通过VMRuntime暴露到Java层，"L"是方法签名的开头。
 
-  ```java
-  
-  //reflection dex
-  public static Method reflect(Class clazz,String name,Class... param)throws Exception{
-      Method getDeclaredMethod = Class.class.getDeclaredMethod("getDeclaredMethod",String.class,Class[].class);
-      return (Method) getDeclaredMethod.invoke(clazz,name,param);
+##### 通过类加载器
+
+`根据1中如果调用者的domain<=被调用者的domain，即可访问。而dexfile的可以设置domain，这个接口暴露到java层，但是无法直接访问，但可以通过BaseDexClassLoader构建isTrusted的dexfile，然后合并到应用类加载器中，即可绕过限制。`
+
+```java
+//dalvik.system.BaseDexClassLoader
+/**
+  * @hide
+  */
+@UnsupportedAppUsage
+public BaseDexClassLoader(String dexPath, File optimizedDirectory,
+        String librarySearchPath, ClassLoader parent, boolean isTrusted) {
+    this(dexPath, librarySearchPath, parent, null, isTrusted);
+}
+public BaseDexClassLoader(String dexPath,
+                          String librarySearchPath, ClassLoader parent, ClassLoader[] sharedLibraryLoaders,
+                          boolean isTrusted) {
+    super(parent);
+    this.pathList = new DexPathList(this, dexPath, librarySearchPath, null, isTrusted);
+}
+
+//dalvik.system.DexPathList
+DexPathList(ClassLoader definingContext, String dexPath,
+            String librarySearchPath, File optimizedDirectory, boolean isTrusted) {
+  this.dexElements = makeDexElements(splitDexPath(dexPath), optimizedDirectory,
+                                     suppressedExceptions, definingContext, isTrusted);
+}
+private static Element[] makeDexElements(List<File> files, File optimizedDirectory,
+            List<IOException> suppressedExceptions, ClassLoader loader, boolean isTrusted) {
+  for (File file : files) {
+    if (file.isDirectory()) {
+      // We support directories for looking up resources. Looking up resources in
+      // directories is useful for running libcore tests.
+      elements[elementsPos++] = new Element(file);
+    } else if (file.isFile()) {
+      DexFile dex = null;
+			//...构造dex
+      if (dex != null && isTrusted) {
+        dex.setTrusted();
+      }
+    } 
   }
-  ```
+  return elements;
+}
 
-  ```java
-  private static void reflection(Context application) throws Exception {
-      File dir = new File(application.getFilesDir(), "hot");
-      if (!dir.exists()) dir.mkdir();
-      File dex = new File(dir, "reflection.dex");
-      if (!dex.exists()) {
-        InputStream inputStream = application.getAssets().open("reflection.dex");
-        dex.createNewFile();
-        FileOutputStream fos = new FileOutputStream(dex);
-        byte[] buffer = new byte[1024];
-        int length = -1;
-        while ((length = inputStream.read(buffer)) != -1) {
-          fos.write(buffer, 0, length);
+//dalvik.system.DexFile
+/*
+ * Set the dex file as trusted: it can access hidden APIs of the platform.
+ */
+/*package*/ 
+void setTrusted() {
+  setTrusted(mCookie);
+}
+private static native void setTrusted(Object cookie);
+
+//art/runtime/native/dalvik_system_DexFile.cc
+static void DexFile_setTrusted(JNIEnv* env, jclass, jobject j_cookie) {
+  Runtime* runtime = Runtime::Current();
+  ScopedObjectAccess soa(env);
+  std::vector<const DexFile*> dex_files;
+  // Assign core platform domain as the dex files are allowed to access all the other domains.
+  for (const DexFile* dex_file : dex_files) {
+    const_cast<DexFile*>(dex_file)->SetHiddenapiDomain(hiddenapi::Domain::kCorePlatform);
+  }
+}
+
+//art/libdexfile/dex/dex_file.h
+//hiddenapi_domain_(hiddenapi::Domain::kApplication)构造函数的默认访问域
+hiddenapi::Domain GetHiddenapiDomain() const { return hiddenapi_domain_; }
+void SetHiddenapiDomain(hiddenapi::Domain value) const { hiddenapi_domain_ = value; }
+```
+
+`虽然BaseDexClassLoader被标记为@hide，但仍然可以被反射。`
+
+> 调用者(应用加载器加载的DexFile)的访问域默认是Domain::kApplication的，通过BaseDexClassLoader的构造函数传入isTrusted，可以设置所加载的DexFile的访问域为Domain::kCorePlatform。而通过GetReflectionCaller获取DexFile里的Class的访问域是返回DexFile的Domain。而一般被调用者的访问域是Domain::kCorePlatform，所以1中比较调用者和被调用者的Domain时，满足条件，可直接放行。
+
+![Alt text](hide-classloader.png)
+
+```java
+//将该类打成dex文件
+public class LoaderReflect {
+    public static Method main(){
+        try {
+            return Activity.class.getDeclaredMethod("dispatchEnterAnimationComplete", null);
+        } catch (NoSuchMethodException e) {
+            e.printStackTrace();
         }
-        fos.close();
-        inputStream.close();
-      }
-      DexFile dexFile = new DexFile(dex);
-      Class aClass = dexFile.loadClass("com.cmq.dex.HideReflection", null);
-      REFLECT = aClass.getDeclaredMethod("reflect", Class.class, String.class, Class[].class);
-  }
-  ```
-
-  ![Alt text](hide-reflection-context.png)
-
-  > 通过DexFile的loadClass不传ClassLoader去加载类，那么类的ClassLoader为null，通常这种情况下，被认为是BootstrapClassLoader加载的。
-  >
-  > 加载类的AccessContext 的Domain是kPlatform。
-
-  ###### 根据2-2修改豁免条件
-
-  ```java
-  //dalvik.system
-  public final class VMRuntime {
-  /**
-       * Sets the list of exemptions from hidden API access enforcement.
-       *
-       * @param signaturePrefixes
-       *         A list of signature prefixes. Each item in the list is a prefix match on the type
-       *         signature of a blacklisted API. All matching APIs are treated as if they were on
-       *         the whitelist: access permitted, and no logging..
-       */
-      @libcore.api.CorePlatformApi
-      public native void setHiddenApiExemptions(String[] signaturePrefixes);
-  }
-  ```
-
-  ```c++
-  //art/runtime/native/dalvik_system_VMRuntime.cc
-  static void VMRuntime_setHiddenApiExemptions(JNIEnv* env,jclass,jobjectArray exemptions) {
-    std::vector<std::string> exemptions_vec;
-    int exemptions_length = env->GetArrayLength(exemptions);
-    for (int i = 0; i < exemptions_length; i++) {
-      jstring exemption = reinterpret_cast<jstring>(env->GetObjectArrayElement(exemptions, i));
-      const char* raw_exemption = env->GetStringUTFChars(exemption, nullptr);
-      exemptions_vec.push_back(raw_exemption);
-      env->ReleaseStringUTFChars(exemption, raw_exemption);
+        return null;
     }
-  
-    Runtime::Current()->SetHiddenApiExemptions(exemptions_vec);
-  }
-  //art/runtime/runtime.h
-  void SetHiddenApiExemptions(const std::vector<std::string>& exemptions) {
-     hidden_api_exemptions_ = exemptions;
-  }
-  const std::vector<std::string>& GetHiddenApiExemptions() {
-      return hidden_api_exemptions_;
-  }
-  ```
+}
+//通过BaseDexClassLoader加载该类，或者获取Element数组添加到应用默认的类加载器中
+Field parent = ClassLoader.class.getDeclaredField("parent");
+parent.setAccessible(true);
+Object o = parent.get(getApplication().getClassLoader());
+Constructor<BaseDexClassLoader> constructor = BaseDexClassLoader.class.getConstructor(String.class, File.class, String.class, ClassLoader.class, boolean.class);
+BaseDexClassLoader classLoader = constructor.newInstance(dex.getPath(), null, null,o , true);
+Class<?> aClass = classLoader.loadClass("com.cmq.dex.LoaderReflect");
+Method main = aClass.getDeclaredMethod("main", null);
+main.invoke(null, null);
+```
 
-  ```java
-  Method forName = Class.class.getDeclaredMethod("forName", String.class);
-  Method getDeclaredMethod = Class.class.getDeclaredMethod("getDeclaredMethod", String.class, Class[].class);
-  Class<?> vmRuntimeClass = (Class<?>) forName.invoke(null, "dalvik.system.VMRuntime");
-  Method getRuntime = (Method) getDeclaredMethod.invoke(vmRuntimeClass, "getRuntime", null);
-  Method setHiddenApiExemptions = (Method) getDeclaredMethod.invoke(vmRuntimeClass, "setHiddenApiExemptions", new Class[]{String[].class});
-  Object sVmRuntime = getRuntime.invoke(null);
-  setHiddenApiExemptions.invoke(sVmRuntime, new Object[]{new String[]{"L"}});
-  ```
+![Alt text](hide-classloader-result.png)
 
-  > 豁免条件通过VMRuntime暴露到Java层，"L"是方法签名的开头。
+##### 修改Runtime
 
-* 通过类加载器
+ [demo(从FreeReflection中复制)](hidereflection)
 
-  `根据1中如果调用者的domain<=被调用者的domain，即可访问。而dexfile的可以设置domain，这个接口暴露到java层，但是无法直接访问，但可以通过BaseDexClassLoader构建isTrusted的dexfile，然后合并到应用类加载器中，即可绕过限制。`
+> 阅读反射限制原理，可知通过native层修改以下函数的返回值，可以绕过限制。
+>
+> 1. runtime->GetHiddenApiEnforcementPolicy()
+>
+>    如果该函数的反正值是EnforcementPolicy::kDisabled，则直接绕过限制。FreeReflection即是这种方式。
+>
+> 2. runtime->GetHiddenApiExemptions()
+>
+>    在限制原理2.2中可知，可以通过修改豁免条件来绕过限制。
+>
+>    反射元反射方法的方式避免限制，但是每次都需要这种方式，调用复杂。可以通过暴露到Java层的VMRuntime的方法setHiddenApiExemptions修改豁免条件来绕过限制。
 
-  ```java
-  //dalvik.system.BaseDexClassLoader
-  /**
-    * @hide
-    */
-  @UnsupportedAppUsage
-  public BaseDexClassLoader(String dexPath, File optimizedDirectory,
-          String librarySearchPath, ClassLoader parent, boolean isTrusted) {
-      this(dexPath, librarySearchPath, parent, null, isTrusted);
-  }
-  public BaseDexClassLoader(String dexPath,
-                            String librarySearchPath, ClassLoader parent, ClassLoader[] sharedLibraryLoaders,
-                            boolean isTrusted) {
-      super(parent);
-      this.pathList = new DexPathList(this, dexPath, librarySearchPath, null, isTrusted);
-  }
-  
-  //dalvik.system.DexPathList
-  DexPathList(ClassLoader definingContext, String dexPath,
-              String librarySearchPath, File optimizedDirectory, boolean isTrusted) {
-    this.dexElements = makeDexElements(splitDexPath(dexPath), optimizedDirectory,
-                                       suppressedExceptions, definingContext, isTrusted);
-  }
-  private static Element[] makeDexElements(List<File> files, File optimizedDirectory,
-              List<IOException> suppressedExceptions, ClassLoader loader, boolean isTrusted) {
-    for (File file : files) {
-      if (file.isDirectory()) {
-        // We support directories for looking up resources. Looking up resources in
-        // directories is useful for running libcore tests.
-        elements[elementsPos++] = new Element(file);
-      } else if (file.isFile()) {
-        DexFile dex = null;
-  			//...构造dex
-        if (dex != null && isTrusted) {
-          dex.setTrusted();
-        }
-      } 
-    }
-    return elements;
-  }
-  
-  //dalvik.system.DexFile
-  /*
-   * Set the dex file as trusted: it can access hidden APIs of the platform.
-   */
-  /*package*/ 
-  void setTrusted() {
-    setTrusted(mCookie);
-  }
-  private static native void setTrusted(Object cookie);
-  
-  //art/runtime/native/dalvik_system_DexFile.cc
-  static void DexFile_setTrusted(JNIEnv* env, jclass, jobject j_cookie) {
-    Runtime* runtime = Runtime::Current();
-    ScopedObjectAccess soa(env);
-    std::vector<const DexFile*> dex_files;
-    // Assign core platform domain as the dex files are allowed to access all the other domains.
-    for (const DexFile* dex_file : dex_files) {
-      const_cast<DexFile*>(dex_file)->SetHiddenapiDomain(hiddenapi::Domain::kCorePlatform);
-    }
-  }
-  
-  //art/libdexfile/dex/dex_file.h
-  //hiddenapi_domain_(hiddenapi::Domain::kApplication)构造函数的默认访问域
-  hiddenapi::Domain GetHiddenapiDomain() const { return hiddenapi_domain_; }
-  void SetHiddenapiDomain(hiddenapi::Domain value) const { hiddenapi_domain_ = value; }
-  ```
 
-  `虽然BaseDexClassLoader被标记为@hide，但仍然可以被反射。`
 
-  > 调用者(应用加载器加载的DexFile)的访问域默认是Domain::kApplication的，通过BaseDexClassLoader的构造函数传入isTrusted，可以设置所加载的DexFile的访问域为Domain::kCorePlatform。而通过GetReflectionCaller获取DexFile里的Class的访问域是返回DexFile的Domain。而一般被调用者的访问域是Domain::kCorePlatform，所以1中比较调用者和被调用者的Domain时，满足条件，可直接放行。
-
-  ![Alt text](hide-classloader.png)
-
-  ```java
-  //将该类打成dex文件
-  public class LoaderReflect {
-      public static Method main(){
-          try {
-              return Activity.class.getDeclaredMethod("dispatchEnterAnimationComplete", null);
-          } catch (NoSuchMethodException e) {
-              e.printStackTrace();
-          }
-          return null;
-      }
-  }
-  //通过BaseDexClassLoader加载该类，或者获取Element数组添加到应用默认的类加载器中
-  Field parent = ClassLoader.class.getDeclaredField("parent");
-  parent.setAccessible(true);
-  Object o = parent.get(getApplication().getClassLoader());
-  Constructor<BaseDexClassLoader> constructor = BaseDexClassLoader.class.getConstructor(String.class, File.class, String.class, ClassLoader.class, boolean.class);
-  BaseDexClassLoader classLoader = constructor.newInstance(dex.getPath(), null, null,o , true);
-  Class<?> aClass = classLoader.loadClass("com.cmq.dex.LoaderReflect");
-  Method main = aClass.getDeclaredMethod("main", null);
-  main.invoke(null, null);
-  ```
-
-  ![Alt text](hide-classloader-result.png)
-
-* 修改Runtime [demo(从FreeReflection中复制)](hidereflection)
-
-  > 阅读反射限制原理，可知通过native层修改以下函数的返回值，可以绕过限制。
-  >
-  > 1. runtime->GetHiddenApiEnforcementPolicy()
-  >
-  >    如果该函数的反正值是EnforcementPolicy::kDisabled，则直接绕过限制。FreeReflection即是这种方式。
-  >
-  > 2. runtime->GetHiddenApiExemptions()
-  >
-  >    在限制原理2.2中可知，可以通过修改豁免条件来绕过限制。
-  >
-  >    反射元反射方法的方式避免限制，但是每次都需要这种方式，调用复杂。可以通过暴露到Java层的VMRuntime的方法setHiddenApiExemptions修改豁免条件来绕过限制。
-
-  
-
-  

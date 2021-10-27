@@ -37,7 +37,7 @@
 >
 > 设置字段的值，如果是基本类型，直接更新其内存值；如果是引用类型，更新其指针地址。
 >
-> <font color="red">以上两个过程通过JMM来实现</font>>。
+> <font color="red">以上两个过程通过JMM来实现</font>。
 
 #### <span id="class">Class</span>
 

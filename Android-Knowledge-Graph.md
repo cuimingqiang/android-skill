@@ -2,20 +2,17 @@
 
 ### 数据结构
 
-- [ ] [线性表](DataStructure/LinearList/Main.md)
+- [x] [线性表](DataStructure/LinearList/Main.md)
 
-- [ ] [树](DataStructure/Tree/Main.md)
+- [x] [树](DataStructure/Tree/Main.md)
 
-- [ ] [图](DataStructure/Graph/Main.md)
+- [x] [图](DataStructure/Graph/Main.md)
 
 ### 算法
 
-- [ ] [算法思想](Algorithm/Thought/Main.md)
-
-- [ ] [排序算法](Algorithm/Sort/Main.md)
-
+- [x] [算法思想](Algorithm/Thought/Main.md)
+- [x] [排序算法](Algorithm/Sort/Main.md)
 - [ ] [查找算法](Algorithm/Search/Main.md)
-
 - [ ] KMP字符串匹配
 
 ### 汇编
@@ -42,13 +39,7 @@
   - [ ] 动态链接库(.so)
 - [ ] Hook
 
-### 网络协议
-
-- [ ] 网络模型
-
-- [ ] Socket
-
-- [ ] Http
+### [网络协议](Internet/Main.md)
 
 ### Java 基础
 
@@ -57,34 +48,21 @@
 - [x] [注解](Java/Annotation/Main.md)
 
 - [x] [反射](Java/Reflection/Main.md)
-- [ ] [动态代理](Java/Proxy.md)
+- [x] [动态代理](Java/Proxy/Main.md)
 
 - [ ] [MethodHandle](Java/MethodHandle/Main.md)
 
-- [ ] [并发](Java/Concurrence/Main.md)
+- [x] [并发](Java/Concurrence/Main.md)
 
-- [ ] [集合](Java/Collection/Main.md)
+- [x] [集合](Java/Collection/Main.md)
 
 ### Kotlin
 
 - [ ] 协程
 
-### 架构思想
+### [架构思想](Architecture/architecture.md)
 
-- [ ] 六大原则
-- [ ] MVC
-- [ ] MVP
-- [ ] MVVM
-- [ ] Bloc
-- [ ] Mobx
-- [ ] Redux
-- [ ] Flux
-
-### 设计模式
-
-- [ ] 创建型 
-- [ ] 结构型
-- [ ] 行为型
+### [设计模式](DesignPatterns/Main.md)
 
 ### 工具
 
@@ -112,11 +90,11 @@
 
 ### Framework
 
-- [ ] [Android启动流程](Framework/Init/Main.md)
+- [x] [Android启动流程](Framework/Init/Main.md)
 
-- [ ] [Handler](Framework/Handler.md)
+- [x] [Handler](Framework/Handler.md)
 
-- [ ] [Binder](Framework/Binder/Main.md)
+- [x] [Binder](Framework/Binder/Main.md)
 
 - [ ] [AMS](Framework/AMS.md)
 
@@ -131,10 +109,9 @@
 ### UI
 
 - [ ] 自定义View
-
 - [ ] 事件传递
-
 - [ ] 换肤
+- [ ] 动画
 - [ ] TextView优化
 - [ ] RecyclerView
 
@@ -194,6 +171,7 @@
 - [ ] 监控
   - [ ] ANR
   - [ ] 卡顿检测
+  - [ ] 业务高可用
 - [ ] 线程优化
 - [ ] 网络优化
 - [ ] 电量优化
